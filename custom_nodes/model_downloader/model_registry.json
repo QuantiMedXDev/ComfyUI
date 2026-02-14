@@ -5,6 +5,21 @@
       "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-base-9b-fp8/resolve/main/flux-2-klein-base-9b-fp8.safetensors",
       "folder": "diffusion_models",
       "description": ""
+    },
+    "qwen_3_8b_fp8mixed.safetensors": {
+      "url": "https://huggingface.co/edicamargo/qwen_3_8b_fp8mixed_abliterated/resolve/main/qwen_3_8b_fp8mixed_abliterated.safetensors",
+      "folder": "text_encoders",
+      "description": ""
+    },
+    "flux2-vae.safetensors": {
+      "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+      "folder": "vae",
+      "description": ""
+    },
+    "flux-2-klein-9b-fp8.safetensors": {
+      "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8/resolve/main/flux-2-klein-9b-fp8.safetensors",
+      "folder": "diffusion_models",
+      "description": ""
     }
   }
 }

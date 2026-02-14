@@ -319,19 +319,44 @@ function createModelCard(model) {
   nameRow.appendChild(nameLabel);
   card.appendChild(nameRow);
 
-  // Info chips
+  // Info row: editable folder + node info
   const info = document.createElement("div");
   Object.assign(info.style, {
     fontSize: "12px",
     color: "#6c7086",
     marginBottom: "10px",
     display: "flex",
-    gap: "16px",
+    gap: "8px",
+    alignItems: "center",
     flexWrap: "wrap",
   });
-  info.innerHTML =
-    `<span>📂 <strong style="color:#89b4fa">${escHtml(model.folder)}</strong></span>` +
-    `<span>🔧 ${escHtml(model.nodeTitle)} <em>(${escHtml(model.inputName)})</em></span>`;
+
+  const folderLabel = document.createElement("span");
+  folderLabel.textContent = "📂";
+  info.appendChild(folderLabel);
+
+  const folderInput = document.createElement("input");
+  folderInput.type = "text";
+  folderInput.value = model.folder;
+  Object.assign(folderInput.style, {
+    background: "#1e1e2e",
+    color: "#89b4fa",
+    border: "1px solid #585b70",
+    borderRadius: "4px",
+    padding: "3px 8px",
+    fontSize: "12px",
+    fontWeight: "600",
+    width: "160px",
+    outline: "none",
+  });
+  folderInput.onfocus = () => (folderInput.style.borderColor = "#89b4fa");
+  folderInput.onblur = () => (folderInput.style.borderColor = "#585b70");
+  folderInput.title = "Target folder in ComfyUI (editable)";
+  info.appendChild(folderInput);
+
+  const nodeInfo = document.createElement("span");
+  nodeInfo.innerHTML = `🔧 ${escHtml(model.nodeTitle)} <em>(${escHtml(model.inputName)})</em>`;
+  info.appendChild(nodeInfo);
   card.appendChild(info);
 
   // URL input + Find URL button
@@ -398,7 +423,7 @@ function createModelCard(model) {
 
   // Download handler
   downloadBtn.onclick = () =>
-    handleDownload(model, urlInput, tokenInput, downloadBtn, card, progContainer, progFill, progText);
+    handleDownload(model, urlInput, tokenInput, downloadBtn, card, progContainer, progFill, progText, folderInput);
 
   return card;
 }
@@ -533,13 +558,15 @@ function showSearchResults(results, urlInput, findBtn) {
 }
 
 // ── Download Handler ───────────────────────────────────────────────
-async function handleDownload(model, urlInput, tokenInput, btn, card, progContainer, progFill, progText) {
+async function handleDownload(model, urlInput, tokenInput, btn, card, progContainer, progFill, progText, folderInput) {
   const url = urlInput.value.trim();
   if (!url) {
     urlInput.style.borderColor = "#f38ba8";
     urlInput.placeholder = "⚠ URL is required!";
     return;
   }
+
+  const folder = folderInput ? folderInput.value.trim() : model.folder;
 
   btn.disabled = true;
   btn.textContent = "⏳ Starting…";
@@ -552,7 +579,7 @@ async function handleDownload(model, urlInput, tokenInput, btn, card, progContai
     fetch("/model_downloader/registry/add", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_name: model.modelName, url, folder: model.folder }),
+      body: JSON.stringify({ model_name: model.modelName, url, folder }),
     });
 
     const resp = await fetch("/model_downloader/download", {
@@ -560,7 +587,7 @@ async function handleDownload(model, urlInput, tokenInput, btn, card, progContai
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         url,
-        folder: model.folder,
+        folder,
         filename: model.modelName,
         token: tokenInput.value.trim(),
       }),
@@ -586,9 +613,11 @@ function pollProgress(downloadId, btn, card, progFill, progText) {
         const pct = Math.round((p.progress / p.total) * 100);
         progFill.style.width = pct + "%";
         progText.textContent = `${mb(p.progress)} / ${mb(p.total)} (${pct}%)`;
+        btn.textContent = `⬇ ${pct}%`;
       } else if (p.progress > 0) {
         progFill.style.width = "50%";
         progText.textContent = `${mb(p.progress)} downloaded…`;
+        btn.textContent = "⬇ Downloading…";
       }
 
       if (p.status === "completed") {
