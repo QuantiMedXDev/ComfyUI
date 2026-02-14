@@ -1,0 +1,10 @@
+{
+  "_description": "Maps model filenames to download URLs. Entries are saved automatically when you provide a URL in the Missing Models dialog.",
+  "models": {
+    "flux-2-klein-base-9b-fp8.safetensors": {
+      "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-base-9b-fp8/resolve/main/flux-2-klein-base-9b-fp8.safetensors",
+      "folder": "diffusion_models",
+      "description": ""
+    }
+  }
+}

@@ -5,8 +5,10 @@ __pycache__/
 !/input/example.png
 /models/
 /temp/
-/custom_nodes/
+/custom_nodes/*
 !custom_nodes/example_node.py.example
+!custom_nodes/zorg_uploader/
+!custom_nodes/model_downloader/
 extra_model_paths.yaml
 /.vs
 .vscode/
