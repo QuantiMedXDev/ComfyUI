@@ -72,7 +72,7 @@ function maskHfTokenInSettings() {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
-// ── Floating Button ────────────────────────────────────────────────
+// ── Floating Draggable Button ───────────────────────────────────────
 function createFloatingButton() {
   const btn = document.createElement("button");
   btn.id = "zorg-missing-models-btn";
@@ -89,9 +89,10 @@ function createFloatingButton() {
     padding: "8px 16px",
     fontSize: "14px",
     fontWeight: "600",
-    cursor: "pointer",
+    cursor: "grab",
     boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-    transition: "all 0.2s ease",
+    transition: "background 0.2s, border-color 0.2s, box-shadow 0.2s",
+    userSelect: "none",
   });
   btn.onmouseenter = () => {
     btn.style.background = "#313244";
@@ -101,7 +102,64 @@ function createFloatingButton() {
     btn.style.background = "#1e1e2e";
     btn.style.borderColor = "#585b70";
   };
-  btn.onclick = openMissingModelsDialog;
+
+  // Restore saved position
+  try {
+    const saved = JSON.parse(localStorage.getItem("zorg_btn_pos"));
+    if (saved) {
+      btn.style.left = saved.left + "px";
+      btn.style.top = saved.top + "px";
+      btn.style.right = "auto";
+      btn.style.bottom = "auto";
+    }
+  } catch (_) {}
+
+  // Drag logic
+  let isDragging = false;
+  let wasDragged = false;
+  let startX, startY, origLeft, origTop;
+
+  btn.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    wasDragged = false;
+    btn.style.cursor = "grabbing";
+    btn.style.transition = "none";
+    const rect = btn.getBoundingClientRect();
+    origLeft = rect.left;
+    origTop = rect.top;
+    startX = e.clientX;
+    startY = e.clientY;
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) wasDragged = true;
+    btn.style.left = (origLeft + dx) + "px";
+    btn.style.top = (origTop + dy) + "px";
+    btn.style.right = "auto";
+    btn.style.bottom = "auto";
+  });
+
+  document.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    btn.style.cursor = "grab";
+    btn.style.transition = "background 0.2s, border-color 0.2s, box-shadow 0.2s";
+    // Save position
+    try {
+      const rect = btn.getBoundingClientRect();
+      localStorage.setItem("zorg_btn_pos", JSON.stringify({ left: rect.left, top: rect.top }));
+    } catch (_) {}
+  });
+
+  btn.onclick = (e) => {
+    if (wasDragged) { e.preventDefault(); return; }
+    openMissingModelsDialog();
+  };
+
   document.body.appendChild(btn);
 }
 
