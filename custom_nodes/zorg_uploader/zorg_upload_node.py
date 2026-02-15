@@ -50,7 +50,7 @@ def _get_zorg_settings() -> dict:
 
     email = settings.get("Zorg.Email", "")
     password = settings.get("Zorg.Password", "")
-    api_url = settings.get("Zorg.ApiUrl", "") or os.getenv("ZORG_API_URL", "http://localhost:8000")
+    api_url = settings.get("Zorg.ApiUrl", "") or os.getenv("ZORG_API_URL", "https://api.zorgsocial.com")
 
     return {"email": email, "password": password, "api_url": api_url}
 

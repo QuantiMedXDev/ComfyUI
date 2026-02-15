@@ -33,7 +33,7 @@ app.registerExtension({
       tooltip:
         "Zorg API base URL (e.g. https://api.zorgsocial.com or http://localhost:8000).",
       type: "text",
-      defaultValue: "http://localhost:8000",
+      defaultValue: "https://api.zorgsocial.com",
     });
 
     // Convert the Password text input into type="password" whenever it appears.
