@@ -5,6 +5,12 @@ let modelInputMap = null;
 let registry = null;
 let dialogEl = null;
 
+const MEDIA_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".svg",
+  ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".mpg", ".mpeg",
+  ".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".opus", ".wma",
+]);
+
 // Well-known input_name → folder_paths folder name.
 // Covers all standard ComfyUI loader nodes + common custom nodes.
 const INPUT_NAME_TO_FOLDER = {
@@ -184,6 +190,7 @@ async function openMissingModelsDialog() {
 function scanGraphForMissingModels() {
   const missing = [];
   const seen = new Set(); // dedup by model name only
+  const ignoredModels = getIgnoredModels();
 
   // 1) Build a lookup from node.properties.models (workflow-embedded metadata).
   //    Each entry: { name, directory, url, hash? }
@@ -213,6 +220,8 @@ function scanGraphForMissingModels() {
       if (widget.type === "combo" && widget.options?.values) {
         const val = widget.value;
         if (val && !widget.options.values.includes(val)) {
+          if (shouldSkipMissingValue(val) || ignoredModels.has(val)) continue;
+
           // Dedup by model name – same model file only needs one download
           if (seen.has(val)) continue;
           seen.add(val);
@@ -346,8 +355,72 @@ function showDialog(missingModels) {
     Object.assign(count.style, { color: "#f9e2af", fontSize: "13px", marginBottom: "12px" });
     modal.appendChild(count);
 
+    const actions = document.createElement("div");
+    Object.assign(actions.style, { display: "flex", justifyContent: "flex-end", marginBottom: "12px" });
+
+    const addCustomBtn = document.createElement("button");
+    addCustomBtn.textContent = "➕ Add Custom Download";
+    Object.assign(addCustomBtn.style, {
+      background: "#45475a",
+      color: "#cdd6f4",
+      border: "1px solid #585b70",
+      borderRadius: "6px",
+      padding: "7px 12px",
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 0.2s",
+    });
+    addCustomBtn.onmouseenter = () => { addCustomBtn.style.background = "#585b70"; addCustomBtn.style.borderColor = "#89b4fa"; };
+    addCustomBtn.onmouseleave = () => { addCustomBtn.style.background = "#45475a"; addCustomBtn.style.borderColor = "#585b70"; };
+    actions.appendChild(addCustomBtn);
+    modal.appendChild(actions);
+
+    const list = document.createElement("div");
+    modal.appendChild(list);
+
+    const updateCount = () => {
+      const cards = list.querySelectorAll(".zorg-model-card").length;
+      count.textContent = `${cards} missing model${cards !== 1 ? "s" : ""} found`;
+    };
+
+    const addCard = (model) => {
+      const card = createModelCard(model, {
+        onRemove: ({ modelName, isCustom }) => {
+          if (!isCustom && modelName) {
+            const ignored = getIgnoredModels();
+            ignored.add(modelName);
+            saveIgnoredModels(ignored);
+            fetch("/model_downloader/registry/remove", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ model_name: modelName }),
+            }).catch(() => {});
+          }
+          card.remove();
+          updateCount();
+        },
+      });
+      list.appendChild(card);
+      updateCount();
+    };
+
+    addCustomBtn.onclick = () => {
+      addCard({
+        nodeId: null,
+        nodeTitle: "Custom entry",
+        nodeType: "manual",
+        inputName: "manual",
+        modelName: "",
+        folder: "checkpoints",
+        url: "",
+        description: "",
+        isCustom: true,
+      });
+    };
+
     for (const model of missingModels) {
-      modal.appendChild(createModelCard(model));
+      addCard(model);
     }
   }
 
@@ -357,8 +430,9 @@ function showDialog(missingModels) {
 }
 
 // ── Model Card ─────────────────────────────────────────────────────
-function createModelCard(model) {
+function createModelCard(model, options = {}) {
   const card = document.createElement("div");
+  card.className = "zorg-model-card";
   Object.assign(card.style, {
     background: "#313244",
     borderRadius: "8px",
@@ -369,12 +443,53 @@ function createModelCard(model) {
 
   // Model name
   const nameRow = document.createElement("div");
-  nameRow.style.marginBottom = "8px";
-  const nameLabel = document.createElement("strong");
-  nameLabel.textContent = model.modelName;
-  nameLabel.style.color = "#f38ba8";
-  nameLabel.style.fontSize = "15px";
-  nameRow.appendChild(nameLabel);
+  Object.assign(nameRow.style, {
+    marginBottom: "8px",
+    display: "flex",
+    gap: "8px",
+    alignItems: "center",
+    justifyContent: "space-between",
+  });
+
+  let modelNameInput = null;
+  if (model.isCustom) {
+    modelNameInput = inputField(model.modelName || "", "Model filename (e.g. model.safetensors)");
+    modelNameInput.style.flex = "1";
+    modelNameInput.style.fontSize = "13px";
+    nameRow.appendChild(modelNameInput);
+  } else {
+    const nameLabel = document.createElement("strong");
+    nameLabel.textContent = model.modelName;
+    nameLabel.style.color = "#f38ba8";
+    nameLabel.style.fontSize = "15px";
+    nameRow.appendChild(nameLabel);
+  }
+
+  const removeBtn = document.createElement("button");
+  removeBtn.textContent = "🗑 Remove";
+  Object.assign(removeBtn.style, {
+    background: "#45475a",
+    color: "#cdd6f4",
+    border: "1px solid #585b70",
+    borderRadius: "6px",
+    padding: "5px 10px",
+    fontSize: "11px",
+    fontWeight: "600",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    transition: "all 0.2s",
+  });
+  removeBtn.onmouseenter = () => { removeBtn.style.background = "#585b70"; removeBtn.style.borderColor = "#f38ba8"; };
+  removeBtn.onmouseleave = () => { removeBtn.style.background = "#45475a"; removeBtn.style.borderColor = "#585b70"; };
+  removeBtn.onclick = () => {
+    const modelName = modelNameInput ? modelNameInput.value.trim() : model.modelName;
+    if (options.onRemove) {
+      options.onRemove({ modelName, isCustom: !!model.isCustom });
+    } else {
+      card.remove();
+    }
+  };
+  nameRow.appendChild(removeBtn);
   card.appendChild(nameRow);
 
   // Info row: editable folder + node info
@@ -481,7 +596,7 @@ function createModelCard(model) {
 
   // Download handler
   downloadBtn.onclick = () =>
-    handleDownload(model, urlInput, tokenInput, downloadBtn, card, progContainer, progFill, progText, folderInput);
+    handleDownload(model, urlInput, tokenInput, downloadBtn, card, progContainer, progFill, progText, folderInput, modelNameInput);
 
   return card;
 }
@@ -616,11 +731,26 @@ function showSearchResults(results, urlInput, findBtn) {
 }
 
 // ── Download Handler ───────────────────────────────────────────────
-async function handleDownload(model, urlInput, tokenInput, btn, card, progContainer, progFill, progText, folderInput) {
+async function handleDownload(model, urlInput, tokenInput, btn, card, progContainer, progFill, progText, folderInput, modelNameInput) {
   const url = urlInput.value.trim();
   if (!url) {
     urlInput.style.borderColor = "#f38ba8";
     urlInput.placeholder = "⚠ URL is required!";
+    return;
+  }
+
+  const modelName = modelNameInput ? modelNameInput.value.trim() : model.modelName;
+  if (!modelName) {
+    if (modelNameInput) {
+      modelNameInput.style.borderColor = "#f38ba8";
+      modelNameInput.placeholder = "⚠ Model filename is required!";
+    }
+    return;
+  }
+
+  if (shouldSkipMissingValue(modelName)) {
+    progContainer.style.display = "block";
+    progText.textContent = "❌ Image/video/audio files are not allowed in missing model downloads.";
     return;
   }
 
@@ -637,7 +767,7 @@ async function handleDownload(model, urlInput, tokenInput, btn, card, progContai
     fetch("/model_downloader/registry/add", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_name: model.modelName, url, folder }),
+      body: JSON.stringify({ model_name: modelName, url, folder }),
     });
 
     const resp = await fetch("/model_downloader/download", {
@@ -646,7 +776,7 @@ async function handleDownload(model, urlInput, tokenInput, btn, card, progContai
       body: JSON.stringify({
         url,
         folder,
-        filename: model.modelName,
+        filename: modelName,
         token: tokenInput.value.trim(),
       }),
     });
@@ -768,4 +898,29 @@ function escHtml(s) {
   const d = document.createElement("div");
   d.textContent = s;
   return d.innerHTML;
+}
+
+function shouldSkipMissingValue(name) {
+  if (!name || typeof name !== "string") return true;
+  const normalized = name.trim().toLowerCase();
+  for (const ext of MEDIA_EXTENSIONS) {
+    if (normalized.endsWith(ext)) return true;
+  }
+  return false;
+}
+
+function getIgnoredModels() {
+  try {
+    const raw = localStorage.getItem("zorg_missing_ignored_models");
+    const items = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(items) ? items : []);
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function saveIgnoredModels(ignoredSet) {
+  try {
+    localStorage.setItem("zorg_missing_ignored_models", JSON.stringify(Array.from(ignoredSet)));
+  } catch (_) {}
 }

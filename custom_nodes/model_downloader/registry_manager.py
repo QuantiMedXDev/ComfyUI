@@ -6,6 +6,7 @@ Missing-Models JS dialog calls:
 
   GET  /model_downloader/registry          – return saved URL registry
   POST /model_downloader/registry/add      – persist a model→URL mapping
+    POST /model_downloader/registry/remove   – remove a saved model mapping
   GET  /model_downloader/model_input_map   – {class_type: {input: folder}}
   POST /model_downloader/download          – start a background download
   GET  /model_downloader/progress          – poll download progress
@@ -209,6 +210,22 @@ async def add_to_registry(request):
         "description": description,
     }
     _save_registry(registry)
+    return web.json_response({"status": "ok"})
+
+
+@PromptServer.instance.routes.post("/model_downloader/registry/remove")
+async def remove_from_registry(request):
+    data = await request.json()
+    model_name = data.get("model_name", "").strip()
+
+    if not model_name:
+        return web.json_response({"error": "model_name required"}, status=400)
+
+    registry = _load_registry()
+    if model_name in registry.get("models", {}):
+        del registry["models"][model_name]
+        _save_registry(registry)
+
     return web.json_response({"status": "ok"})
 
 
